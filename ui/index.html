@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GREED! — 지하 유물 거래</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="cinematic.css" />
+</head>
+<body>
+  <!-- 상단 최소 상태 바 -->
+  <div class="ambient-hud"><span id="round-label">ROUND 1</span><span id="phase-label" class="sr-only">거래 중</span><button id="btn-menu" type="button" aria-label="게임 메뉴">Ⅱ <kbd>TAB</kbd></button></div>
+
+  <!-- 음침한 지하 거래방 스테이지 -->
+  <main class="stage-room">
+    <div class="scene-camera" id="scene-camera">
+        <div id="turn-spotlight" aria-hidden="true"><div class="light-cone"></div><div class="light-pool"></div></div>
+    <div class="room-architecture" aria-hidden="true"><div class="wall-arch"></div><div class="wall-sconce left"></div><div class="wall-sconce right"></div></div>
+    <div class="overhead-lamp" aria-hidden="true"></div>
+
+    <!-- 맞은편 상대 3명 (비주얼 노벨 스포트라이트 구도) -->
+    <section class="opponents-row" aria-label="테이블 맞은편의 상대">
+      <div id="seat-1" class="opp-seat"></div>
+      <div id="seat-2" class="opp-seat"></div>
+      <div id="seat-3" class="opp-seat"></div>
+    </section>
+
+    <div class="first-person-hands" aria-hidden="true">
+      <svg viewBox="0 0 1200 180" preserveAspectRatio="none"><g fill="#292b2a" stroke="#827665" stroke-width="1.5"><path d="M0 180V117L115 82 187 31Q198 25 202 34L178 64 228 43Q243 39 241 51L197 80 252 64Q264 65 259 75L206 103 244 94Q256 95 248 106L183 143 141 180Z"/><path d="M1200 180V117L1085 82 1013 31Q1002 25 998 34L1022 64 972 43Q957 39 959 51L1003 80 948 64Q936 65 941 75L994 103 956 94Q944 95 952 106L1017 143 1059 180Z"/></g><path d="M0 180V124L115 94 152 180M1200 180V124L1085 94 1048 180" fill="#111919" stroke="#454b44" stroke-width="3"/></svg>
+    </div>
+
+    <!-- 2.5D 원근 테이블 -->
+    <section class="table-perspective">
+      <div class="table-surface">
+        <div class="table-inner-line"></div>
+        <div class="table-mid">
+          <div id="center-deck" class="deck-stack" title="숫자 카드 덱 (1~24)">
+            <div class="deck-layer l3"></div>
+            <div class="deck-layer l2"></div>
+            <div class="deck-layer l1">GREED</div>
+          </div>
+
+          <div class="pot-board">
+            <div id="current-decl-num" class="pot-value" hidden></div>
+            <div id="current-decl-by" class="pot-sub"></div>
+          <div id="smoke-badge" class="smoke-badge hidden"><svg class="item-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 36h24a7 7 0 0 0 0-14 10 10 0 0 0-19-5 10 10 0 0 0-5 19Z"/></svg> 연막 보호</div>
+          </div>
+
+
+        </div>
+      </div>
+    </section>
+
+    </div>
+    <div class="impact-overlay" id="impact-overlay" aria-hidden="true"></div>
+    <div class="sensory-message" id="sensory-message" aria-live="polite"></div>
+    <div id="central-theatre" class="central-theatre" hidden aria-live="polite"></div>
+
+    <!-- 비주얼 노벨 스타일 하단 대화창 -->
+    <section class="vn-dialogue" aria-live="polite">
+      <div class="dialogue-heading"><div id="vn-speaker" class="vn-speaker">안내</div></div>
+      <div id="vn-text" class="vn-text">어두운 테이블 위에 카드가 놓였습니다.</div>
+      <button class="dialogue-mark" type="button" aria-label="대사 즉시 표시">◆</button>
+    </section>
+
+    <!-- 카드 비행 & 포인트 팝업 레이어 -->
+    <div id="fx-layer" class="fx-layer"></div>
+  </main>
+
+  <!-- 하단 1인칭 내 손 HUD -->
+  <footer class="hud-bottom">
+    <section class="relic-panel" aria-label="유물"><div id="relic-slot" class="inv-slots"></div></section>
+    <section class="inventory-panel">
+      <div id="my-inventory" class="inv-slots"></div>
+    </section>
+
+    <section class="action-panel">
+      <div id="declare-controls" class="declare-box">
+        <section class="my-status-panel" id="my-status-panel" aria-label="내 상태와 선언 기준">
+          <div class="my-header">
+            <strong>나</strong>
+            <span id="my-hp" class="hp-hearts">♥♥♥</span>
+            <span id="my-points" class="pts-badge">20P</span>
+          </div>
+          <div class="visible-sum-note"><span>최소 합계</span><strong id="visible-sum">—</strong></div>
+          <div id="my-debuffs" class="debuff-row"></div>
+          <div id="seat-0" class="deal-anchor" aria-hidden="true"></div>
+        </section>
+        <label class="sr-only" for="declare-input" id="action-hint">선언 숫자</label>
+        <div class="decl-input-row" id="decl-input-row">
+          <button id="btn-dec-minus" class="btn-step" type="button" aria-label="선언 숫자 1 줄이기">−1</button>
+          <input id="declare-input" type="number" min="1" max="96" placeholder="1" aria-describedby="action-hint" />
+          <button id="btn-dec-plus" class="btn-step" type="button" aria-label="선언 숫자 1 올리기">+1</button>
+          <button id="btn-toggle-oath" class="oath-control hidden" type="button" aria-pressed="false">서약 ×2</button>
+          <button id="btn-declare" class="btn-primary" type="button">
+            선언 <span id="decl-preview-pts" class="decl-preview">+20P</span>
+          </button>
+        </div>
+        <div id="reaction-note" class="reaction-note" hidden></div>
+      </div>
+
+      <div class="verdict-actions">
+      <button id="btn-greed" class="btn-greed" type="button" disabled>
+        GREED!
+        <small>허세 적발</small>
+      </button>
+      <button id="btn-pass" class="btn-pass" type="button" disabled>넘기기 <span>선언을 믿고 계속</span></button>
+      </div>
+    </section>
+  </footer>
+
+  <!-- 정비 시간 (뒷면 덱 랜덤 뽑기 & 빚 정산) 모달 -->
+  <dialog id="shop-dialog" class="game-dialog">
+    <div class="dialog-head">
+      <h2>정비 시간</h2>
+      <span id="shop-pts-info" class="pts-badge">20P</span>
+    </div>
+    <p class="dialog-sub">더미에는 무엇이 숨어 있을까.</p>
+    <div id="shop-maintenance-actions" class="maint-actions"></div>
+    <div id="shop-draw-deck" class="draw-deck-row">
+      <button id="btn-draw-card" class="mystery-pack blind-deck" type="button"><span class="physical-deck"><i></i><i></i><i>G</i></span><strong>뽑기</strong><small>18P</small></button>
+    </div>
+    <div id="drawn-result" class="drawn-result hidden"></div>
+    <div class="dialog-foot">
+      <button id="btn-next-round" class="btn-primary" type="button">다음 라운드 →</button>
+    </div>
+  </dialog>
+
+  <!-- 대상 선택 / 참견의 손 / 가위바위보 모달 -->
+  <dialog id="choice-dialog" class="game-dialog">
+    <div class="dialog-head">
+      <h2 id="choice-title">선택</h2>
+    </div>
+    <p id="choice-desc" class="dialog-sub"></p>
+    <div id="choice-options" class="choice-options"></div>
+    <div class="dialog-foot">
+      <button id="btn-choice-cancel" class="btn-ghost" type="button">닫기</button>
+    </div>
+  </dialog>
+
+  <!-- 카드 상세 & 사용 모달 -->
+  <aside id="card-detail-dialog" class="inspect-panel hidden" aria-labelledby="cd-title">
+    <div class="dialog-head">
+      <h2 id="cd-title">카드 이름</h2>
+      <span id="cd-kind" class="round-pill">유물</span>
+    </div>
+    <p id="cd-desc" class="cd-desc"></p>
+    <p id="cd-note" class="inspection-note"></p>
+    <div class="dialog-foot">
+      <button id="btn-cd-use" class="btn-primary hidden" type="button">사용하기</button>
+    </div>
+  </aside>
+
+  <!-- 규칙 안내 모달 -->
+  <aside id="rules-dialog" class="inspect-panel hidden" aria-labelledby="rules-title">
+    <div class="dialog-head">
+      <h2 id="rules-title">거래 수첩</h2>
+    </div>
+    <ul class="rules-list">
+      <li><strong>인디언 포커:</strong> 1~24 카드가 1장씩 배분됩니다. 상대 카드는 보이지만 내 카드는 보이지 않습니다.</li>
+      <li><strong>구간 보상:</strong> 라운드 첫 선언은 <strong>20P 확정</strong>, 이후 직전 선언과의 차이에 따라 <strong>10 / 20 / 30 / 40P</strong>를 얻습니다. (+1~2: 10P, +3~5: 20P, +6~10: 30P, +11~: 40P / 배율 효과 별개)</li>
+      <li><strong>GREED! 적발:</strong> 선언이 생존자 카드의 실제 합계를 넘었다면 적발하세요. 성공 시 선언자 체력 -1, 호출자 보상 획득. 오발은 체력 -1 (사형집행인의 호루라기 보유 시 -2)입니다.</li>
+      <li><strong>판단 시간:</strong> 상대 선언에 GREED! 또는 넘기기를 선택합니다. 다른 상대도 판단 중 GREED!를 먼저 외칠 수 있습니다.</li>
+      <li><strong>라운드 종료:</strong> GREED!는 성공·실패 모두 합계를 공개한 뒤 라운드를 끝냅니다.</li>
+      <li><strong>최소 합계:</strong> 보이는 숫자 합에 보이지 않는 인원 수만큼 남은 덱에서 가장 작은 서로 다른 숫자를 더합니다. 눈 담보로 더 가려지면 ?가 붙습니다.</li>
+      <li><strong>두 배 서약:</strong> 기본 보상 30P 이상인 선언에만 적용됩니다. 추가 획득 보상의 150%가 빚으로 남습니다.</li>
+      <li><strong>정비:</strong> 18P로 무작위 한 장을 뽑습니다. 유물 1칸과 일반 아이템 2칸을 사용합니다.</li>
+      <li><strong>조작:</strong> Tab으로 메뉴를 열고 ESC로 돌아옵니다. 1~3으로 소지품을 살펴보고, 좌우 방향키로 이동한 뒤 아래 방향키·Enter로 사용합니다.</li>
+      <li><strong>운명의 뼛조각:</strong> 2d20의 순서 있는 결과를 1~400으로 환산합니다. 낮을수록 유리하며 대성공 5% / 성공 25% / 평범한 성공 40% / 실패 25% / 대실패 5%입니다.</li>
+    </ul>
+    <div class="dialog-foot">
+      <button id="btn-close-rules" class="btn-primary" type="button">확인</button>
+    </div>
+  </aside>
+
+  <dialog id="pause-menu" class="pause-menu" aria-labelledby="menu-title">
+    <span class="menu-kicker">THE TABLE CAN WAIT</span><h1 id="menu-title">GREED!</h1>
+    <button id="btn-resume" type="button">이어하기</button>
+    <button id="btn-rules" type="button">설명서</button>
+    <button id="btn-restart" type="button">새 게임</button>
+    <small>ESC · 돌아가기</small>
+  </dialog>
+
+  <!-- 게임 오버 모달 -->
+  <dialog id="gameover-dialog" class="game-dialog">
+    <div class="dialog-head">
+      <h2 id="gameover-title">게임 종료</h2>
+    </div>
+    <p id="gameover-desc" class="dialog-sub"></p>
+    <div id="gameover-standings" class="standings-list"></div>
+    <div class="dialog-foot">
+      <button id="btn-play-again" class="btn-primary" type="button">다시 하기</button>
+    </div>
+  </dialog>
+
+  <script defer src="icons.js"></script>
+  <script defer src="cards.js"></script>
+  <script defer src="rules.js"></script>
+  <script defer src="portraits.js"></script>
+  <script defer src="ink.js"></script>
+  <script defer src="scene.js"></script>
+  <script defer src="vendor/cannon-es.js"></script>
+  <script defer src="dice-physics.js"></script>
+  <script defer src="dice.js"></script>
+  <script defer src="game.js"></script>
+</body>
+</html>
