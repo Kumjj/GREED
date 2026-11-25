@@ -28,8 +28,11 @@
   function create(element) {
     const keys=['maskImage','maskSize','maskRepeat','maskPosition','maskMode','opacity','willChange'];
     const saved=Object.fromEntries(keys.map(key=>[key,element.style[key]]));
+    const rect=element.getBoundingClientRect();
+    const w=rect.width,h=rect.height,s=Math.max(w,h);
     element.style.maskImage=`url("${atlasURL}")`;
-    element.style.maskSize='800% 1600%';element.style.maskRepeat='no-repeat';element.style.maskMode='alpha';
+    element.style.maskSize=s>0?`${8*s}px ${16*s}px`:'800% 1600%';
+    element.style.maskRepeat='no-repeat';element.style.maskMode='alpha';
     element.style.willChange='mask-position, opacity';
     let prior=-1;
     return {
@@ -38,7 +41,12 @@
         element.style.opacity=p<=0?'0':'1';
         if(frame===prior)return;prior=frame;
         const col=frame%8,row=Math.floor(frame/8);
-        element.style.maskPosition=`${col/7*100}% ${row/15*100}%`;
+        if(s>0){
+          const x=-col*s+(w-s)/2,y=-row*s+(h-s)/2;
+          element.style.maskPosition=`${x}px ${y}px`;
+        }else{
+          element.style.maskPosition=`${col/7*100}% ${row/15*100}%`;
+        }
         element.dataset.inkFrame=frame;
       },
       remove() {for(const key of keys)element.style[key]=saved[key];delete element.dataset.inkFrame;}

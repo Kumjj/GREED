@@ -91,7 +91,7 @@
         if(token!==generation||!element.isConnected){finish();return;}
         if(!paused)elapsed+=Math.min(now-last,60);last=now;
         const p=Math.min(1,elapsed/duration);
-        fx.set(out?1-p:GREED_INK.entrance(p));
+        fx.set(out?1-GREED_INK.entrance(p):GREED_INK.entrance(p));
         if(p===1)finish();else requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
@@ -125,7 +125,7 @@
     if(token!==generation)return;
     await wait(kind==="verdict"?2000:kind==="region"?900:kind==="declaration"?260:450);
     if(token!==generation)return;
-    await Promise.all([ink(wash,240,true),ink(copy,240,true)]);
+    await Promise.all([ink(wash,820,true),ink(copy,760,true)]);
     if(token===generation){theatre.hidden=true;theatre.style.cssText="";theatre.getAnimations().forEach(a=>a.cancel());}
   }
   async function travel(element, destination, start, options = {}) {
@@ -259,7 +259,7 @@
     const echo=box.cloneNode(true);echo.removeAttribute("aria-live");echo.setAttribute("aria-hidden","true");echo.classList.add("dialogue-echo");
     echo.querySelectorAll("[id]").forEach(el=>el.removeAttribute("id"));echo.querySelectorAll("button").forEach(el=>el.tabIndex=-1);
     box.before(echo);
-    ink(echo,220,true).then(()=>echo.remove());
+    ink(echo,520,true).then(()=>echo.remove());
     ink(box,1650).then(()=>{if(version!==dialogueVersion)return;});
   }
   let litSeat = null;

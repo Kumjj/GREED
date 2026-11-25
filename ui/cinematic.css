@@ -108,7 +108,7 @@ body { grid-template-rows: minmax(490px,1fr) auto; min-height: 720px; }
 .dice-theatre { background:radial-gradient(ellipse,#13221bbf,transparent 70%); }
 .dice-canvas { max-width:100%; }.dice-result { color:#e8d7a7;font-family:Georgia,'Batang',serif;font-size:20px;letter-spacing:1px;text-align:center;padding:0 15px; }.dice-result.bad { color:#dd8775; }
 @media(max-width:1100px) {
-  .opponents-row { width:90%; }
+  .opponents-row { width:88%; }
   .character-presence > .num-card { left:20%; }
   .hud-bottom { grid-template-columns:64px 130px minmax(390px,1fr);gap:16px;padding:16px 20px; }
   .relic-panel { position:static;width:auto; }

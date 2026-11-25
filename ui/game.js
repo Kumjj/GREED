@@ -72,12 +72,56 @@
       bandagePenalty: 0,
       noHealNextRound: false,
       noHealThisRound: false,
-      handSealedThisRound: false
+      handSealedThisRound: false,
+      npcMomentum: 0,
+      npcFrustration: 0,
+      npcDecision: null
     };
   }
 
   function hasCard(p, cardId) {
     return p.inventory.some((c) => c.id === cardId);
+  }
+
+  let npcApiAvailable = true;
+  function npcObservation(cpu) {
+    const blind = cpu.limbs.includes("눈") && cpu.suppressedLimb !== "눈" ? cpu.blindTargetId : null;
+    const known = state.players.filter(p => p.id !== cpu.id && p.id !== blind && p.card > 0);
+    const visible = known.filter(p => p.hp > 0);
+    return {
+      visible_cards: visible.map(p => p.card), known_cards: known.map(p => p.card),
+      unknown_count: state.players.filter(p => p.hp > 0).length - visible.length,
+      style: cpu.style, hp: cpu.hp, points: cpu.points,
+      leader_points: Math.max(...state.players.filter(p => p.hp > 0).map(p => p.points)),
+      debt: cpu.debt, momentum: cpu.npcMomentum, frustration: cpu.npcFrustration,
+      previous: state.realDecl, declaration_count: state.declCount, last_reward: state.lastDeclReward,
+      step: cpu.limbs.includes("입") && cpu.suppressedLimb !== "입" ? 3 : 1,
+      head: hasCard(cpu,"head_of_greed"), whistle: hasCard(cpu,"executioner_whistle"),
+      zero_reward: cpu.swapZeroNext || cpu.smokeActive, reward_penalty: cpu.bandagePenalty
+    };
+  }
+  async function requestNpcDecisions(action, players) {
+    if (!npcApiAvailable || !players.length) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 800);
+    try {
+      const response = await fetch("/api/npc", {
+        method: "POST", headers: {"Content-Type":"application/json"}, signal: controller.signal,
+        body: JSON.stringify({action,observations:players.map(npcObservation)})
+      });
+      if (!response.ok) {
+        if ([404,405,501].includes(response.status)) npcApiAvailable=false;
+        document.body.dataset.npcPolicy="fallback";
+        return null;
+      }
+      const result = await response.json();
+      if (result.provider !== "python" || result.decisions?.length !== players.length) return null;
+      document.body.dataset.npcPolicy="python";
+      return result.decisions;
+    } catch {
+      document.body.dataset.npcPolicy="fallback";
+      return null;
+    } finally {clearTimeout(timeout);}
   }
 
   function pickBlindCard(player) {
@@ -479,6 +523,13 @@
       p.noHealThisRound = p.noHealNextRound;
       p.noHealNextRound = false;
       p.handSealedThisRound = p.limbs.includes("손") && p.suppressedLimb !== "손";
+      p.npcMomentum *= .5;
+      p.npcFrustration *= .7;
+      if (!p.isHuman) {
+        const visibleOpponents=state.players.filter(other=>other.hp>0 && other.id!==p.id);
+        p.blindTargetId=p.limbs.includes("눈") && p.suppressedLimb!=="눈" && visibleOpponents.length
+          ? visibleOpponents[Math.floor(Math.random()*visibleOpponents.length)].id : null;
+      }
     });
 
     const me = state.players[0];
@@ -549,6 +600,7 @@
     const shownVal = realVal;
 
     player.points += reward;
+    if (!player.isHuman && reward > 0) player.npcMomentum=Math.min(3,player.npcMomentum+1);
     if (reward > 0) spawnFloatText(seatTargetEl(player), `+${reward}P`, "pts");
 
     const sum = actualSum();
@@ -569,12 +621,19 @@
     if (player.isHuman) {
       say("YOU", doubleOath ? `"${shownVal}... 두 배 서약으로 걸지." (+${reward}P)` : `"${shownVal}." (+${reward}P)`);
     } else {
-      const line = doubleOath ? `"${shownVal}! 두 배 서약을 걸겠다." (+${reward}P)` : `"${shownVal}... 이 정도는 넘겠지." (+${reward}P)`;
+      const motive = player.npcDecision?.reason;
+      const line = doubleOath ? `"${shownVal}! 두 배 서약을 걸겠다." (+${reward}P)`
+        : motive === "chasing_losses" ? `"${shownVal}. 이번엔 내가 챙길 차례야." (+${reward}P)`
+        : motive === "reward_temptation" ? `"${shownVal}... 이왕이면 크게 챙겨야지." (+${reward}P)`
+        : motive === "pressing_luck" ? `"${shownVal}. 한 번 더 가 보자고." (+${reward}P)`
+        : `"${shownVal}... 이 정도는 넘겠지." (+${reward}P)`;
       say(player.name, line);
     }
     await sleep(800);
     if (runId !== state.runId) return;
-    state.pendingChallenger = state.lastDeclBySmoke ? null : pickCpuChallenger(player);
+    const challenger = state.lastDeclBySmoke ? null : await pickCpuChallenger(player);
+    if (runId !== state.runId) return;
+    state.pendingChallenger = challenger;
     state.challengerChecked = true;
     if (!player.isHuman && state.players[0].hp > 0) {
       state.awaitingReaction = true;
@@ -598,7 +657,9 @@
   }
 
   async function finishDeclaration() {
-    const challenger = state.challengerChecked ? state.pendingChallenger : (!state.lastDeclBySmoke ? pickCpuChallenger(state.lastDeclPlayer) : null);
+    const runId=state.runId,version=state.reactionVersion;
+    const challenger = state.challengerChecked ? state.pendingChallenger : (!state.lastDeclBySmoke ? await pickCpuChallenger(state.lastDeclPlayer) : null);
+    if(runId!==state.runId || version!==state.reactionVersion || state.phase!=="turn")return;
     state.reactionVersion++;
     state.pendingChallenger = null;
     state.challengerChecked = false;
@@ -622,7 +683,16 @@
     advanceTurn();
   }
 
-  function pickCpuChallenger(declarer) {
+  async function pickCpuChallenger(declarer) {
+    const players=state.players.filter(p => !p.isHuman && p.hp>0 && p.id!==declarer.id);
+    const runId=state.runId,version=state.reactionVersion;
+    const decisions=await requestNpcDecisions("challenge",players);
+    await sleep(1);
+    if(runId!==state.runId || version!==state.reactionVersion)return null;
+    if(decisions) {
+      players.forEach((p,i)=>p.npcDecision=decisions[i]);
+      return players.find((p,i)=>decisions[i].call===true) || null;
+    }
     const sum = actualSum();
     for (const cpu of state.players) {
       if (cpu.isHuman || cpu.hp <= 0 || cpu.id === declarer.id) continue;
@@ -647,12 +717,15 @@
     state.roundRevealSum=sum;
     let gain=0;
     if(success){
+      accused.npcFrustration=Math.min(3,accused.npcFrustration+1);accused.npcMomentum=0;
       accused.hp=Math.max(0,accused.hp-1);accused.mood='shock';
       const priorReward=state.lastDeclReward;
       accused.points=Math.max(0,accused.points-priorReward+10);
       state.lastDeclReward=10;
       gain=Math.max(10,priorReward-10);caller.points+=gain;caller.mood='smug';
+      caller.npcMomentum=Math.min(3,caller.npcMomentum+1);
     }else{
+      caller.npcFrustration=Math.min(3,caller.npcFrustration+1);caller.npcMomentum=0;
       const damage=hasCard(caller,'executioner_whistle')?2:1;
       caller.hp=Math.max(0,caller.hp-damage);caller.mood='shock';
     }
@@ -682,11 +755,24 @@
 
   async function runCpuTurn() {
     const cpu = state.players[state.turnIdx];
+    const runId=state.runId;
     await sleep(950);
-    if (state.phase !== "turn" || state.turnIdx !== cpu.id || cpu.hp <= 0) return;
+    if (runId!==state.runId || state.phase !== "turn" || state.turnIdx !== cpu.id || cpu.hp <= 0) return;
 
+    const decisions=await requestNpcDecisions("declare",[cpu]);
+    await sleep(1);
+    if(runId!==state.runId || state.phase!=="turn" || state.turnIdx!==cpu.id || cpu.hp<=0)return;
+    const decision=decisions?.[0];
+    const step=cpu.limbs.includes("입") && cpu.suppressedLimb!=="입"?3:1;
+    if(decision && Number.isInteger(decision.value) && decision.value>=state.maxDecl+step) {
+      cpu.npcDecision=decision;
+      await performDeclaration(cpu,decision.value,{doubleOath:decision.oath===true});
+      return;
+    }
+
+    cpu.npcDecision=null;
     const est = Math.round((actualSum() - cpu.card) + 12);
-    const minReq = state.maxDecl + 1;
+    const minReq = state.maxDecl + step;
     const target = minReq > est + 4 ? minReq : Math.max(minReq, Math.min(minReq + 4, est));
     const useDouble = hasCard(cpu, "head_of_greed") && calcTierReward(target - state.maxDecl, state.declCount === 0) >= 30 && target <= est && Math.random() < 0.45;
     await performDeclaration(cpu, target, { doubleOath: useDouble });
